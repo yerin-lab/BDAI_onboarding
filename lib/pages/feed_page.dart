@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/post.dart';
 import '../widgets/post_card.dart';
 import 'create_post_page.dart';
+import 'detail_page.dart';
 
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
@@ -76,7 +77,19 @@ class _FeedPageState extends State<FeedPage> {
         padding: const EdgeInsets.only(top: 10, bottom: 140), // FAB 공간 확보
         itemCount: posts.length,
         separatorBuilder: (_, __) => const SizedBox(height: 6),
-        itemBuilder: (context, index) => PostCard(post: posts[index]),
+        itemBuilder: (context, index) {
+          final post = posts[index];
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => DetailPage(post: post)),
+              );
+            },
+            child: PostCard(post: post),
+          );
+        },
       ),
 
       floatingActionButton: FloatingActionButton(
