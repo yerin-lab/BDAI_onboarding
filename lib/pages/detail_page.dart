@@ -56,6 +56,39 @@ class _DetailPageState extends State<DetailPage> {
     }
   }
 
+  Future<bool> _confirmDelete() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('게시글을 삭제할까요?'),
+        content: const Text('삭제한 게시글은 복구할 수 없어요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              '삭제',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<void> _deletePost() async {
+    final ok = await _confirmDelete();
+    if (!ok) return;
+
+    if (!mounted) return;
+    // 삭제 결과로 삭제된 글 id 반환
+    Navigator.pop(context, _post.id);
+  }
+
   void _openMyPostMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -76,7 +109,7 @@ class _DetailPageState extends State<DetailPage> {
               title: const Text('삭제', style: TextStyle(color: Colors.red)),
               onTap: () {
                 Navigator.pop(context);
-                // TODO : 삭제 처리
+                _deletePost();
               },
             ),
           ],

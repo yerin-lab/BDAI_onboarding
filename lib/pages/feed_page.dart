@@ -82,20 +82,30 @@ class _FeedPageState extends State<FeedPage> {
         separatorBuilder: (_, __) => const SizedBox(height: 6),
         itemBuilder: (context, index) {
           final post = posts[index];
+
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () async {
-              final updated = await Navigator.push<Post>(
+              final result = await Navigator.push<Object?>(
                 context,
                 MaterialPageRoute(builder: (_) => DetailPage(post: post)),
               );
 
-              if (updated != null) {
-                setState(() {
-                  final i = posts.indexWhere((p) => p.id == updated.id);
-                  if (i != -1) posts[i] = updated;
-                });
-              }
+              if (result == null) return;
+
+              setState(() {
+                if (result is int) {
+                  // 삭제 케이스: id가 돌아옴
+                  posts.removeWhere((p) => p.id == result);
+                  return;
+                }
+
+                if (result is Post) {
+                  // 수정/갱신 케이스: Post가 돌아옴
+                  final i = posts.indexWhere((p) => p.id == result.id);
+                  if (i != -1) posts[i] = result;
+                }
+              });
             },
 
             child: PostCard(post: post),
