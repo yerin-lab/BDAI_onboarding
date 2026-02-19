@@ -17,8 +17,15 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  int _currentIndex = 0; // 추후 화면 변경을 위한 탭 번호
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +53,21 @@ class HomePage extends StatelessWidget {
       ),
 
       body: const Center(child: Text('Knock Knock')),
+
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index; // 눌린 탭 기억
+          });
+        },
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.wifi), label: '노크'),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: '집'),
+          BottomNavigationBarItem(icon: Icon(Icons.room), label: '방'),
+        ],
+      ),
     );
   }
 }
