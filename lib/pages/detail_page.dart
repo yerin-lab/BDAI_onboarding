@@ -37,9 +37,39 @@ class _DetailPageState extends State<DetailPage> {
     });
   }
 
+  void _openMyPostMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('수정'),
+              onTap: () {
+                Navigator.pop(context);
+                // TODO : 수정 로직
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('삭제', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(context);
+                // TODO : 삭제 처리
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final post = widget.post;
+    final isMine = post.isMine;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -53,12 +83,11 @@ class _DetailPageState extends State<DetailPage> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.black),
-            onPressed: () {
-              // TODO: 수정/삭제/신고 같은 메뉴 붙일 자리
-            },
-          ),
+          if (isMine)
+            IconButton(
+              icon: const Icon(Icons.more_vert, color: Colors.black),
+              onPressed: () => _openMyPostMenu(context),
+            ),
         ],
       ),
 

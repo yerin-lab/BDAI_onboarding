@@ -6,6 +6,7 @@ class Post {
   final int daysAgo;
   final int likes;
   final int comments;
+  final bool isMine;
 
   const Post({
     required this.author,
@@ -15,5 +16,6 @@ class Post {
     required this.daysAgo,
     required this.likes,
     required this.comments,
-  });
+    bool? isMine,
+  }) : isMine = isMine ?? false;
 }

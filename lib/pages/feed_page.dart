@@ -32,6 +32,7 @@ class _FeedPageState extends State<FeedPage> {
       daysAgo: 2,
       likes: 3,
       comments: 0,
+      isMine: true,
     ),
   ];
 
