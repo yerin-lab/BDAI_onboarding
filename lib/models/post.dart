@@ -1,4 +1,5 @@
 class Post {
+  final int id;
   final String author;
   final String category;
   final String title;
@@ -8,7 +9,8 @@ class Post {
   final int comments;
   final bool isMine;
 
-  const Post({
+  Post({
+    required this.id,
     required this.author,
     required this.category,
     required this.title,
@@ -18,4 +20,25 @@ class Post {
     required this.comments,
     bool? isMine,
   }) : isMine = isMine ?? false;
+
+  // 수정용
+  Post copyWith({
+    String? title,
+    String? content,
+    String? category,
+    int? likes,
+    int? comments,
+  }) {
+    return Post(
+      id: id,
+      author: author,
+      category: category ?? this.category,
+      title: title ?? this.title,
+      content: content ?? this.content,
+      daysAgo: daysAgo,
+      likes: likes ?? this.likes,
+      comments: comments ?? this.comments,
+      isMine: isMine,
+    );
+  }
 }

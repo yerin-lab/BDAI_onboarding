@@ -15,7 +15,8 @@ class _FeedPageState extends State<FeedPage> {
   int _currentIndex = 0;
 
   final List<Post> posts = [
-    const Post(
+    Post(
+      id: 1,
       author: '테스트유저',
       category: '일반',
       title: '포트폴리오 첨삭 부탁드립니다.',
@@ -24,7 +25,8 @@ class _FeedPageState extends State<FeedPage> {
       likes: 1,
       comments: 1,
     ),
-    const Post(
+    Post(
+      id: 2,
       author: '예린',
       category: '일반',
       title: 'Flutter 피드 UI 기초로 만드는 중',
@@ -82,12 +84,20 @@ class _FeedPageState extends State<FeedPage> {
           final post = posts[index];
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () {
-              Navigator.push(
+            onTap: () async {
+              final updated = await Navigator.push<Post>(
                 context,
                 MaterialPageRoute(builder: (_) => DetailPage(post: post)),
               );
+
+              if (updated != null) {
+                setState(() {
+                  final i = posts.indexWhere((p) => p.id == updated.id);
+                  if (i != -1) posts[i] = updated;
+                });
+              }
             },
+
             child: PostCard(post: post),
           );
         },

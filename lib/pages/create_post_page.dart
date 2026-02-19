@@ -54,6 +54,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     }
 
     final post = Post(
+      id: 1,
       author: '나',
       category: _selectedCategory!,
       title: title,

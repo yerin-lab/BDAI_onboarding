@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/post.dart';
+import 'edit_post_page.dart';
 
 class DetailPage extends StatefulWidget {
   final Post post;
@@ -11,6 +12,7 @@ class DetailPage extends StatefulWidget {
 
 class _DetailPageState extends State<DetailPage> {
   final TextEditingController _commentCtrl = TextEditingController();
+  late Post _post;
 
   // 댓글 mock data
   final List<_Comment> _comments = [
@@ -37,6 +39,23 @@ class _DetailPageState extends State<DetailPage> {
     });
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _post = widget.post;
+  }
+
+  Future<void> _openEdit() async {
+    final updated = await Navigator.push<Post>(
+      context,
+      MaterialPageRoute(builder: (_) => EditPostPage(post: _post)),
+    );
+
+    if (updated != null) {
+      setState(() => _post = updated); // 상세 화면 즉시 갱신
+    }
+  }
+
   void _openMyPostMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -49,7 +68,7 @@ class _DetailPageState extends State<DetailPage> {
               title: const Text('수정'),
               onTap: () {
                 Navigator.pop(context);
-                // TODO : 수정 로직
+                _openEdit();
               },
             ),
             ListTile(
@@ -68,7 +87,7 @@ class _DetailPageState extends State<DetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final post = widget.post;
+    final post = _post;
     final isMine = post.isMine;
 
     return Scaffold(
@@ -80,7 +99,7 @@ class _DetailPageState extends State<DetailPage> {
         surfaceTintColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context, _post),
         ),
         actions: [
           if (isMine)
