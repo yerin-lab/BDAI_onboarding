@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../models/post.dart';
 import '../widgets/post_card.dart';
 import 'create_post_page.dart';
+import 'detail_page.dart';
+import '../widgets/filter_bottomsheet.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
@@ -12,9 +16,13 @@ class FeedPage extends StatefulWidget {
 
 class _FeedPageState extends State<FeedPage> {
   int _currentIndex = 0;
+  FeedFilter _filter = FeedFilter.all;
+
+  static const _postsKey = 'feed_posts_v1';
 
   final List<Post> posts = [
-    const Post(
+    Post(
+      id: 1,
       author: '테스트유저',
       category: '일반',
       title: '포트폴리오 첨삭 부탁드립니다.',
@@ -22,8 +30,10 @@ class _FeedPageState extends State<FeedPage> {
       daysAgo: 23,
       likes: 1,
       comments: 1,
+      type: PostType.question,
     ),
-    const Post(
+    Post(
+      id: 2,
       author: '예린',
       category: '일반',
       title: 'Flutter 피드 UI 기초로 만드는 중',
@@ -31,24 +41,127 @@ class _FeedPageState extends State<FeedPage> {
       daysAgo: 2,
       likes: 3,
       comments: 0,
+      isMine: true,
+      type: PostType.post,
     ),
   ];
 
-  Future<void> _openCreate() async {
+  @override
+  void initState() {
+    super.initState();
+    _loadPosts();
+  }
+
+  Future<void> _loadPosts() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_postsKey);
+
+    if (raw == null) return; // 저장된 게 없으면 기존 샘플 posts 유지
+
+    try {
+      final List decoded = jsonDecode(raw) as List;
+      final loaded = decoded
+          .map((e) => Post.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+      setState(() {
+        posts
+          ..clear()
+          ..addAll(loaded);
+      });
+    } catch (e) {
+      debugPrint('posts load error: $e');
+    }
+  }
+
+  Future<void> _savePosts() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = jsonEncode(posts.map((p) => p.toJson()).toList());
+    await prefs.setString(_postsKey, raw);
+  }
+
+  Future<void> _openCreate(PostType type) async {
     final created = await Navigator.push<Post>(
       context,
-      MaterialPageRoute(builder: (_) => const CreatePostPage()),
+      MaterialPageRoute(builder: (_) => CreatePostPage(type: type)),
     );
 
     if (created != null) {
       setState(() {
         posts.insert(0, created);
       });
+      await _savePosts();
     }
+  }
+
+  void _openCreateTypeSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '어떤 글을 작성할까요?',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  leading: const Icon(Icons.article_outlined),
+                  title: const Text('게시글'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _openCreate(PostType.post);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.help_outline),
+                  title: const Text('질문'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _openCreate(PostType.question);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openFilterSheet() async {
+    final selected = await showModalBottomSheet<FeedFilter>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => FeedFilterSheet(selected: _filter),
+    );
+
+    if (selected == null) return;
+
+    setState(() {
+      _filter = selected;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final filteredPosts = posts.where((p) {
+      if (_filter == FeedFilter.all) return true;
+      if (_filter == FeedFilter.post) return p.type == PostType.post;
+      return p.type == PostType.question;
+    }).toList();
+
     return Scaffold(
       backgroundColor: Colors.white,
 
@@ -65,7 +178,7 @@ class _FeedPageState extends State<FeedPage> {
             tooltip: '채팅',
           ),
           IconButton(
-            onPressed: () {},
+            onPressed: _openFilterSheet,
             icon: const Icon(Icons.tune),
             tooltip: '필터',
           ),
@@ -74,13 +187,44 @@ class _FeedPageState extends State<FeedPage> {
 
       body: ListView.separated(
         padding: const EdgeInsets.only(top: 10, bottom: 140), // FAB 공간 확보
-        itemCount: posts.length,
+        itemCount: filteredPosts.length,
         separatorBuilder: (_, __) => const SizedBox(height: 6),
-        itemBuilder: (context, index) => PostCard(post: posts[index]),
+        itemBuilder: (context, index) {
+          final post = filteredPosts[index];
+
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () async {
+              final result = await Navigator.push<Object?>(
+                context,
+                MaterialPageRoute(builder: (_) => DetailPage(post: post)),
+              );
+
+              if (result == null) return;
+
+              setState(() {
+                if (result is int) {
+                  // 삭제 케이스: id가 돌아옴
+                  posts.removeWhere((p) => p.id == result);
+                  return;
+                }
+
+                if (result is Post) {
+                  // 수정/갱신 케이스: Post가 돌아옴
+                  final i = posts.indexWhere((p) => p.id == result.id);
+                  if (i != -1) posts[i] = result;
+                }
+              });
+              _savePosts();
+            },
+
+            child: PostCard(post: post),
+          );
+        },
       ),
 
       floatingActionButton: FloatingActionButton(
-        onPressed: _openCreate,
+        onPressed: _openCreateTypeSheet,
         child: const Icon(Icons.edit),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,

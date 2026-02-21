@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/post.dart';
 
 class CreatePostPage extends StatefulWidget {
-  const CreatePostPage({super.key});
+  const CreatePostPage({super.key, this.type = PostType.post});
+
+  final PostType type;
 
   @override
   State<CreatePostPage> createState() => _CreatePostPageState();
@@ -54,6 +56,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     }
 
     final post = Post(
+      id: 1,
       author: '나',
       category: _selectedCategory!,
       title: title,
@@ -61,6 +64,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       daysAgo: 0,
       likes: 0,
       comments: 0,
+      type: widget.type,
     );
 
     Navigator.pop(context, post);
