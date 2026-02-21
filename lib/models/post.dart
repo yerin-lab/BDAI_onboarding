@@ -1,3 +1,5 @@
+enum PostType { post, question }
+
 class Post {
   final int id;
   final String author;
@@ -8,6 +10,7 @@ class Post {
   final int likes;
   final int comments;
   final bool isMine;
+  final PostType type;
 
   Post({
     required this.id,
@@ -19,6 +22,7 @@ class Post {
     required this.likes,
     required this.comments,
     bool? isMine,
+    this.type = PostType.post,
   }) : isMine = isMine ?? false;
 
   // 수정용

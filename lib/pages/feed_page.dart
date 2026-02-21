@@ -3,6 +3,7 @@ import '../models/post.dart';
 import '../widgets/post_card.dart';
 import 'create_post_page.dart';
 import 'detail_page.dart';
+import '../widgets/filter_bottomsheet.dart';
 
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
@@ -13,6 +14,7 @@ class FeedPage extends StatefulWidget {
 
 class _FeedPageState extends State<FeedPage> {
   int _currentIndex = 0;
+  FeedFilter _filter = FeedFilter.all;
 
   final List<Post> posts = [
     Post(
@@ -24,6 +26,7 @@ class _FeedPageState extends State<FeedPage> {
       daysAgo: 23,
       likes: 1,
       comments: 1,
+      type: PostType.question,
     ),
     Post(
       id: 2,
@@ -35,13 +38,14 @@ class _FeedPageState extends State<FeedPage> {
       likes: 3,
       comments: 0,
       isMine: true,
+      type: PostType.post,
     ),
   ];
 
-  Future<void> _openCreate() async {
+  Future<void> _openCreate(PostType type) async {
     final created = await Navigator.push<Post>(
       context,
-      MaterialPageRoute(builder: (_) => const CreatePostPage()),
+      MaterialPageRoute(builder: (_) => CreatePostPage(type: type)),
     );
 
     if (created != null) {
@@ -51,8 +55,74 @@ class _FeedPageState extends State<FeedPage> {
     }
   }
 
+  void _openCreateTypeSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '어떤 글을 작성할까요?',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  leading: const Icon(Icons.article_outlined),
+                  title: const Text('게시글'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _openCreate(PostType.post);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.help_outline),
+                  title: const Text('질문'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _openCreate(PostType.question);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openFilterSheet() async {
+    final selected = await showModalBottomSheet<FeedFilter>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => FeedFilterSheet(selected: _filter),
+    );
+
+    if (selected == null) return;
+
+    setState(() {
+      _filter = selected;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final filteredPosts = posts.where((p) {
+      if (_filter == FeedFilter.all) return true;
+      if (_filter == FeedFilter.post) return p.type == PostType.post;
+      return p.type == PostType.question;
+    }).toList();
+
     return Scaffold(
       backgroundColor: Colors.white,
 
@@ -69,7 +139,7 @@ class _FeedPageState extends State<FeedPage> {
             tooltip: '채팅',
           ),
           IconButton(
-            onPressed: () {},
+            onPressed: _openFilterSheet,
             icon: const Icon(Icons.tune),
             tooltip: '필터',
           ),
@@ -78,10 +148,10 @@ class _FeedPageState extends State<FeedPage> {
 
       body: ListView.separated(
         padding: const EdgeInsets.only(top: 10, bottom: 140), // FAB 공간 확보
-        itemCount: posts.length,
+        itemCount: filteredPosts.length,
         separatorBuilder: (_, __) => const SizedBox(height: 6),
         itemBuilder: (context, index) {
-          final post = posts[index];
+          final post = filteredPosts[index];
 
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -114,7 +184,7 @@ class _FeedPageState extends State<FeedPage> {
       ),
 
       floatingActionButton: FloatingActionButton(
-        onPressed: _openCreate,
+        onPressed: _openCreateTypeSheet,
         child: const Icon(Icons.edit),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
