@@ -4,6 +4,8 @@ import '../widgets/post_card.dart';
 import 'create_post_page.dart';
 import 'detail_page.dart';
 import '../widgets/filter_bottomsheet.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
@@ -15,6 +17,8 @@ class FeedPage extends StatefulWidget {
 class _FeedPageState extends State<FeedPage> {
   int _currentIndex = 0;
   FeedFilter _filter = FeedFilter.all;
+
+  static const _postsKey = 'feed_posts_v1';
 
   final List<Post> posts = [
     Post(
@@ -42,6 +46,40 @@ class _FeedPageState extends State<FeedPage> {
     ),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _loadPosts();
+  }
+
+  Future<void> _loadPosts() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_postsKey);
+
+    if (raw == null) return; // 저장된 게 없으면 기존 샘플 posts 유지
+
+    try {
+      final List decoded = jsonDecode(raw) as List;
+      final loaded = decoded
+          .map((e) => Post.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+      setState(() {
+        posts
+          ..clear()
+          ..addAll(loaded);
+      });
+    } catch (e) {
+      debugPrint('posts load error: $e');
+    }
+  }
+
+  Future<void> _savePosts() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = jsonEncode(posts.map((p) => p.toJson()).toList());
+    await prefs.setString(_postsKey, raw);
+  }
+
   Future<void> _openCreate(PostType type) async {
     final created = await Navigator.push<Post>(
       context,
@@ -52,6 +90,7 @@ class _FeedPageState extends State<FeedPage> {
       setState(() {
         posts.insert(0, created);
       });
+      await _savePosts();
     }
   }
 
@@ -176,6 +215,7 @@ class _FeedPageState extends State<FeedPage> {
                   if (i != -1) posts[i] = result;
                 }
               });
+              _savePosts();
             },
 
             child: PostCard(post: post),
