@@ -44,4 +44,31 @@ class ReplyApi {
       throw Exception('댓글 작성 실패');
     }
   }
+
+  Future<void> deleteReply(int replyId) async {
+    final uri = Uri.parse('$baseUrl/replies/$replyId');
+
+    final response = await http.delete(uri);
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception('댓글 삭제 실패: ${response.statusCode}');
+    }
+  }
+
+  Future<void> updateReply({
+    required int replyId,
+    required String content,
+  }) async {
+    final uri = Uri.parse('$baseUrl/replies/$replyId');
+
+    final response = await http.patch(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'content': content}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('댓글 수정 실패: ${response.statusCode}');
+    }
+  }
 }

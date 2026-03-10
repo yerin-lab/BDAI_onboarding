@@ -84,6 +84,97 @@ class _DetailPageState extends State<DetailPage> {
     }
   }
 
+  Future<bool> _confirmDeleteComment() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('댓글을 삭제할까요?'),
+        content: const Text('삭제한 댓글은 복구할 수 없어요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              '삭제',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
+  }
+
+  Future<void> _deleteComment(Reply reply) async {
+    final ok = await _confirmDeleteComment();
+    if (!ok) return;
+
+    try {
+      await _replyApi.deleteReply(reply.id);
+      await _loadComments();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('댓글이 삭제되었어요')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('댓글 삭제 실패: $e')));
+    }
+  }
+
+  Future<void> _editComment(Reply reply) async {
+    final controller = TextEditingController(text: reply.content);
+
+    final newText = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('댓글 수정'),
+        content: TextField(
+          controller: controller,
+          maxLines: 4,
+          decoration: const InputDecoration(hintText: '댓글 내용을 입력하세요'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext, controller.text.trim());
+            },
+            child: const Text('수정'),
+          ),
+        ],
+      ),
+    );
+
+    if (newText == null || newText.isEmpty) return;
+
+    try {
+      await _replyApi.updateReply(replyId: reply.id, content: newText);
+
+      await _loadComments();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('댓글이 수정되었어요')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('댓글 수정 실패: $e')));
+    }
+  }
+
   Future<void> _openEdit() async {
     final updated = await Navigator.push<Post>(
       context,
@@ -270,6 +361,8 @@ class _DetailPageState extends State<DetailPage> {
                         child: _CommentTile(
                           comment: c,
                           timeText: _formatCreatedAt(c.createdAt),
+                          onEdit: () => _editComment(c),
+                          onDelete: () => _deleteComment(c),
                         ),
                       ),
                     ),
@@ -287,8 +380,44 @@ class _DetailPageState extends State<DetailPage> {
 class _CommentTile extends StatelessWidget {
   final Reply comment;
   final String timeText;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
-  const _CommentTile({required this.comment, required this.timeText});
+  const _CommentTile({
+    required this.comment,
+    required this.timeText,
+    this.onEdit,
+    this.onDelete,
+  });
+
+  void _openCommentMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('수정'),
+              onTap: () {
+                Navigator.pop(context);
+                onEdit?.call();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('삭제', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(context);
+                onDelete?.call();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -323,6 +452,14 @@ class _CommentTile extends StatelessWidget {
                     timeText,
                     style: const TextStyle(color: Colors.black45, fontSize: 12),
                   ),
+                  const Spacer(),
+                  if (comment.isMine)
+                    IconButton(
+                      icon: const Icon(Icons.more_vert, size: 18),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => _openCommentMenu(context),
+                    ),
                 ],
               ),
               const SizedBox(height: 6),
