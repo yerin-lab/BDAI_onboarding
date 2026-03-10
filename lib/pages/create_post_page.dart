@@ -63,6 +63,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       content: content,
       daysAgo: 0,
       likes: 0,
+      isLiked: false,
       comments: 0,
       type: widget.type,
     );

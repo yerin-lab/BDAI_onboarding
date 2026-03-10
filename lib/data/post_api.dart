@@ -77,4 +77,22 @@ class PostApi {
       throw Exception('게시글 삭제 실패: ${response.statusCode}');
     }
   }
+
+  Future<void> likePost(int postId) async {
+    final uri = Uri.parse('$baseUrl/posts/$postId/like');
+    final response = await http.post(uri);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('게시글 좋아요 실패');
+    }
+  }
+
+  Future<void> unlikePost(int postId) async {
+    final uri = Uri.parse('$baseUrl/posts/$postId/like');
+    final response = await http.delete(uri);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('게시글 좋아요 취소 실패');
+    }
+  }
 }

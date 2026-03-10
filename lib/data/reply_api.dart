@@ -85,4 +85,22 @@ class ReplyApi {
       throw Exception('댓글 수정 실패: ${response.statusCode}');
     }
   }
+
+  Future<void> likeReply(int replyId) async {
+    final uri = Uri.parse('$baseUrl/replies/$replyId/like');
+    final response = await http.post(uri);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('댓글 좋아요 실패');
+    }
+  }
+
+  Future<void> unlikeReply(int replyId) async {
+    final uri = Uri.parse('$baseUrl/replies/$replyId/like');
+    final response = await http.delete(uri);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('댓글 좋아요 취소 실패');
+    }
+  }
 }

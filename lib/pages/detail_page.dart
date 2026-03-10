@@ -5,9 +5,11 @@ import '../models/reply.dart';
 import '../data/reply_api.dart';
 import '../repositories/reply_repository.dart';
 import '../data/reply_local.dart';
+import '../data/post_api.dart';
 
 class DetailPage extends StatefulWidget {
   final Post post;
+
   const DetailPage({super.key, required this.post});
 
   @override
@@ -17,10 +19,14 @@ class DetailPage extends StatefulWidget {
 class _DetailPageState extends State<DetailPage> {
   final TextEditingController _commentCtrl = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+
   final ReplyRepository _replyRepository = ReplyRepository(
     api: ReplyApi(),
     local: ReplyLocal(),
   );
+
+  final PostApi _postApi = PostApi();
+
   late Post _post;
 
   List<Reply> _comments = [];
@@ -28,6 +34,8 @@ class _DetailPageState extends State<DetailPage> {
   bool _isLoadingComments = true;
   bool _isLoadingMore = false;
   bool _hasMoreComments = true;
+  bool _isTogglingPostLike = false;
+
   String? _commentError;
 
   int _commentPage = 1;
@@ -53,16 +61,16 @@ class _DetailPageState extends State<DetailPage> {
 
     final position = _scrollController.position;
 
-    print('스크롤 위치: ${position.pixels} / 최대: ${position.maxScrollExtent}');
+    debugPrint('스크롤 위치: ${position.pixels} / 최대: ${position.maxScrollExtent}');
 
     if (position.pixels >= position.maxScrollExtent - 200) {
-      print('바닥 근처 도달 -> 추가 로드 시도');
+      debugPrint('바닥 근처 도달 -> 추가 로드 시도');
       _loadMoreComments();
     }
   }
 
   Future<void> _loadInitialComments() async {
-    print('초기 댓글 로드 시작');
+    debugPrint('초기 댓글 로드 시작');
 
     if (!mounted) return;
 
@@ -81,7 +89,7 @@ class _DetailPageState extends State<DetailPage> {
         limit: _commentLimit,
       );
 
-      print('초기 로드 댓글 수: ${replies.length}');
+      debugPrint('초기 로드 댓글 수: ${replies.length}');
 
       if (!mounted) return;
 
@@ -91,9 +99,9 @@ class _DetailPageState extends State<DetailPage> {
         _hasMoreComments = replies.length == _commentLimit;
       });
 
-      print('초기 로드 후 hasMore: $_hasMoreComments');
+      debugPrint('초기 로드 후 hasMore: $_hasMoreComments');
     } catch (e) {
-      print('초기 댓글 로드 에러: $e');
+      debugPrint('초기 댓글 로드 에러: $e');
 
       if (!mounted) return;
 
@@ -105,8 +113,8 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   Future<void> _loadMoreComments() async {
-    print('추가 로드 진입');
-    print(
+    debugPrint('추가 로드 진입');
+    debugPrint(
       '_isLoadingMore: $_isLoadingMore, _hasMoreComments: $_hasMoreComments',
     );
 
@@ -118,7 +126,7 @@ class _DetailPageState extends State<DetailPage> {
 
     try {
       final nextPage = _commentPage + 1;
-      print('다음 페이지 요청: $nextPage');
+      debugPrint('다음 페이지 요청: $nextPage');
 
       final replies = await _replyRepository.fetchReplies(
         postId: _post.id,
@@ -126,7 +134,7 @@ class _DetailPageState extends State<DetailPage> {
         limit: _commentLimit,
       );
 
-      print('추가 로드 댓글 수: ${replies.length}');
+      debugPrint('추가 로드 댓글 수: ${replies.length}');
 
       if (!mounted) return;
 
@@ -137,10 +145,10 @@ class _DetailPageState extends State<DetailPage> {
         _hasMoreComments = replies.length == _commentLimit;
       });
 
-      print('현재 전체 댓글 수: ${_comments.length}');
-      print('추가 로드 후 hasMore: $_hasMoreComments');
+      debugPrint('현재 전체 댓글 수: ${_comments.length}');
+      debugPrint('추가 로드 후 hasMore: $_hasMoreComments');
     } catch (e) {
-      print('추가 댓글 로드 에러: $e');
+      debugPrint('추가 댓글 로드 에러: $e');
 
       if (!mounted) return;
 
@@ -165,6 +173,7 @@ class _DetailPageState extends State<DetailPage> {
         content: text,
         isMine: true,
       );
+
       _commentCtrl.clear();
       await _loadInitialComments();
 
@@ -260,6 +269,7 @@ class _DetailPageState extends State<DetailPage> {
         replyId: reply.id,
         content: newText,
       );
+
       await _loadInitialComments();
 
       if (!mounted) return;
@@ -281,7 +291,9 @@ class _DetailPageState extends State<DetailPage> {
     );
 
     if (updated != null) {
-      setState(() => _post = updated);
+      setState(() {
+        _post = updated;
+      });
     }
   }
 
@@ -306,6 +318,7 @@ class _DetailPageState extends State<DetailPage> {
         ],
       ),
     );
+
     return result ?? false;
   }
 
@@ -315,6 +328,45 @@ class _DetailPageState extends State<DetailPage> {
 
     if (!mounted) return;
     Navigator.pop(context, _post.id);
+  }
+
+  Future<void> _togglePostLike() async {
+    if (_isTogglingPostLike) return;
+
+    _isTogglingPostLike = true;
+
+    final oldPost = _post;
+
+    final optimisticPost = oldPost.copyWith(
+      isLiked: !oldPost.isLiked,
+      likes: oldPost.isLiked
+          ? (oldPost.likes > 0 ? oldPost.likes - 1 : 0)
+          : oldPost.likes + 1,
+    );
+
+    setState(() {
+      _post = optimisticPost;
+    });
+
+    try {
+      if (oldPost.isLiked) {
+        await _postApi.unlikePost(oldPost.id);
+      } else {
+        await _postApi.likePost(oldPost.id);
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _post = oldPost;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('좋아요 처리에 실패했어요.')));
+    } finally {
+      _isTogglingPostLike = false;
+    }
   }
 
   void _openMyPostMenu(BuildContext context) {
@@ -409,12 +461,18 @@ class _DetailPageState extends State<DetailPage> {
                     ),
                   ),
                   const SizedBox(height: 18),
+
                   Row(
                     children: [
-                      const Icon(
-                        Icons.favorite_border,
-                        size: 20,
-                        color: Colors.black54,
+                      IconButton(
+                        onPressed: _togglePostLike,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: Icon(
+                          post.isLiked ? Icons.favorite : Icons.favorite_border,
+                          size: 20,
+                          color: post.isLiked ? Colors.red : Colors.black54,
+                        ),
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -434,6 +492,7 @@ class _DetailPageState extends State<DetailPage> {
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 20),
                   const Divider(height: 1),
                   const SizedBox(height: 10),
