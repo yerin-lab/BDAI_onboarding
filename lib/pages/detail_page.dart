@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/post.dart';
 import 'edit_post_page.dart';
+import '../models/reply.dart';
+import '../data/reply_api.dart';
+import '../repositories/reply_repository.dart';
+import '../data/reply_local.dart';
 
 class DetailPage extends StatefulWidget {
   final Post post;
@@ -12,37 +16,262 @@ class DetailPage extends StatefulWidget {
 
 class _DetailPageState extends State<DetailPage> {
   final TextEditingController _commentCtrl = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final ReplyRepository _replyRepository = ReplyRepository(
+    api: ReplyApi(),
+    local: ReplyLocal(),
+  );
   late Post _post;
 
-  // 댓글 mock data
-  final List<_Comment> _comments = [
-    _Comment(
-      author: 'Mark',
-      content: '포트폴리오를 managinggc@gmail.com 으로 보내주시면 검토 드릴게요',
-      daysAgo: 15,
-    ),
-  ];
+  List<Reply> _comments = [];
 
-  @override
-  void dispose() {
-    _commentCtrl.dispose();
-    super.dispose();
-  }
+  bool _isLoadingComments = true;
+  bool _isLoadingMore = false;
+  bool _hasMoreComments = true;
+  String? _commentError;
 
-  void _addComment() {
-    final text = _commentCtrl.text.trim();
-    if (text.isEmpty) return;
-
-    setState(() {
-      _comments.insert(0, _Comment(author: '예린', content: text, daysAgo: 0));
-      _commentCtrl.clear();
-    });
-  }
+  int _commentPage = 1;
+  static const int _commentLimit = 10;
 
   @override
   void initState() {
     super.initState();
     _post = widget.post;
+    _loadInitialComments();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _commentCtrl.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+
+    final position = _scrollController.position;
+
+    print('스크롤 위치: ${position.pixels} / 최대: ${position.maxScrollExtent}');
+
+    if (position.pixels >= position.maxScrollExtent - 200) {
+      print('바닥 근처 도달 -> 추가 로드 시도');
+      _loadMoreComments();
+    }
+  }
+
+  Future<void> _loadInitialComments() async {
+    print('초기 댓글 로드 시작');
+
+    if (!mounted) return;
+
+    setState(() {
+      _isLoadingComments = true;
+      _commentError = null;
+      _commentPage = 1;
+      _hasMoreComments = true;
+      _comments = [];
+    });
+
+    try {
+      final replies = await _replyRepository.fetchReplies(
+        postId: _post.id,
+        page: 1,
+        limit: _commentLimit,
+      );
+
+      print('초기 로드 댓글 수: ${replies.length}');
+
+      if (!mounted) return;
+
+      setState(() {
+        _comments = replies;
+        _isLoadingComments = false;
+        _hasMoreComments = replies.length == _commentLimit;
+      });
+
+      print('초기 로드 후 hasMore: $_hasMoreComments');
+    } catch (e) {
+      print('초기 댓글 로드 에러: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingComments = false;
+        _commentError = e.toString();
+      });
+    }
+  }
+
+  Future<void> _loadMoreComments() async {
+    print('추가 로드 진입');
+    print(
+      '_isLoadingMore: $_isLoadingMore, _hasMoreComments: $_hasMoreComments',
+    );
+
+    if (_isLoadingMore || !_hasMoreComments) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final nextPage = _commentPage + 1;
+      print('다음 페이지 요청: $nextPage');
+
+      final replies = await _replyRepository.fetchReplies(
+        postId: _post.id,
+        page: nextPage,
+        limit: _commentLimit,
+      );
+
+      print('추가 로드 댓글 수: ${replies.length}');
+
+      if (!mounted) return;
+
+      setState(() {
+        _comments.addAll(replies);
+        _commentPage = nextPage;
+        _isLoadingMore = false;
+        _hasMoreComments = replies.length == _commentLimit;
+      });
+
+      print('현재 전체 댓글 수: ${_comments.length}');
+      print('추가 로드 후 hasMore: $_hasMoreComments');
+    } catch (e) {
+      print('추가 댓글 로드 에러: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingMore = false;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('댓글 추가 로드 실패: $e')));
+    }
+  }
+
+  Future<void> _addComment() async {
+    final text = _commentCtrl.text.trim();
+    if (text.isEmpty) return;
+
+    try {
+      await _replyRepository.createReply(
+        postId: _post.id,
+        author: '예린',
+        content: text,
+        isMine: true,
+      );
+      _commentCtrl.clear();
+      await _loadInitialComments();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('댓글이 등록되었어요')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('댓글 작성 실패: $e')));
+    }
+  }
+
+  Future<bool> _confirmDeleteComment() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('댓글을 삭제할까요?'),
+        content: const Text('삭제한 댓글은 복구할 수 없어요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              '삭제',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
+  }
+
+  Future<void> _deleteComment(Reply reply) async {
+    final ok = await _confirmDeleteComment();
+    if (!ok) return;
+
+    try {
+      await _replyRepository.deleteReply(postId: _post.id, replyId: reply.id);
+      await _loadInitialComments();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('댓글이 삭제되었어요')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('댓글 삭제 실패: $e')));
+    }
+  }
+
+  Future<void> _editComment(Reply reply) async {
+    final controller = TextEditingController(text: reply.content);
+
+    final newText = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('댓글 수정'),
+        content: TextField(
+          controller: controller,
+          maxLines: 4,
+          decoration: const InputDecoration(hintText: '댓글 내용을 입력하세요'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext, controller.text.trim());
+            },
+            child: const Text('수정'),
+          ),
+        ],
+      ),
+    );
+
+    if (newText == null || newText.isEmpty) return;
+
+    try {
+      await _replyRepository.updateReply(
+        postId: _post.id,
+        replyId: reply.id,
+        content: newText,
+      );
+      await _loadInitialComments();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('댓글이 수정되었어요')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('댓글 수정 실패: $e')));
+    }
   }
 
   Future<void> _openEdit() async {
@@ -52,7 +281,7 @@ class _DetailPageState extends State<DetailPage> {
     );
 
     if (updated != null) {
-      setState(() => _post = updated); // 상세 화면 즉시 갱신
+      setState(() => _post = updated);
     }
   }
 
@@ -85,7 +314,6 @@ class _DetailPageState extends State<DetailPage> {
     if (!ok) return;
 
     if (!mounted) return;
-    // 삭제 결과로 삭제된 글 id 반환
     Navigator.pop(context, _post.id);
   }
 
@@ -118,6 +346,18 @@ class _DetailPageState extends State<DetailPage> {
     );
   }
 
+  String _formatCreatedAt(String createdAt) {
+    final dt = DateTime.tryParse(createdAt);
+    if (dt == null) return '';
+
+    final diff = DateTime.now().difference(dt);
+
+    if (diff.inMinutes < 1) return '방금';
+    if (diff.inHours < 1) return '${diff.inMinutes}분 전';
+    if (diff.inDays < 1) return '${diff.inHours}시간 전';
+    return '${diff.inDays}일 전';
+  }
+
   @override
   Widget build(BuildContext context) {
     final post = _post;
@@ -125,7 +365,6 @@ class _DetailPageState extends State<DetailPage> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -142,19 +381,15 @@ class _DetailPageState extends State<DetailPage> {
             ),
         ],
       ),
-
-      // 댓글 입력바가 키보드에 밀려 올라오게
       resizeToAvoidBottomInset: true,
-
       body: SafeArea(
         child: Column(
           children: [
-            // 스크롤 영역(본문 + 댓글)
             Expanded(
               child: ListView(
+                controller: _scrollController,
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                 children: [
-                  // 제목
                   Text(
                     post.title,
                     style: const TextStyle(
@@ -165,8 +400,6 @@ class _DetailPageState extends State<DetailPage> {
                     ),
                   ),
                   const SizedBox(height: 18),
-
-                  // 본문
                   Text(
                     post.content,
                     style: const TextStyle(
@@ -175,10 +408,7 @@ class _DetailPageState extends State<DetailPage> {
                       color: Colors.black87,
                     ),
                   ),
-
                   const SizedBox(height: 18),
-
-                  // 좋아요/댓글 카운트
                   Row(
                     children: [
                       const Icon(
@@ -199,26 +429,51 @@ class _DetailPageState extends State<DetailPage> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${post.comments}',
+                        '${_comments.length}',
                         style: const TextStyle(color: Colors.black54),
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 20),
                   const Divider(height: 1),
                   const SizedBox(height: 10),
 
-                  // 댓글 목록
-                  for (final c in _comments) ...[
-                    _CommentTile(comment: c),
-                    const SizedBox(height: 10),
-                  ],
+                  if (_isLoadingComments)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_commentError != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      child: Text('댓글을 불러오지 못했어요: $_commentError'),
+                    )
+                  else if (_comments.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Text('첫 댓글을 남겨보세요!'),
+                    )
+                  else
+                    ..._comments.map(
+                      (c) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _CommentTile(
+                          comment: c,
+                          timeText: _formatCreatedAt(c.createdAt),
+                          onEdit: () => _editComment(c),
+                          onDelete: () => _deleteComment(c),
+                        ),
+                      ),
+                    ),
+
+                  if (_isLoadingMore)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
                 ],
               ),
             ),
-
-            // 하단 댓글 입력 바
             _CommentInputBar(controller: _commentCtrl, onSubmit: _addComment),
           ],
         ),
@@ -227,27 +482,53 @@ class _DetailPageState extends State<DetailPage> {
   }
 }
 
-class _Comment {
-  final String author;
-  final String content;
-  final int daysAgo;
-  _Comment({
-    required this.author,
-    required this.content,
-    required this.daysAgo,
-  });
-}
-
 class _CommentTile extends StatelessWidget {
-  final _Comment comment;
-  const _CommentTile({required this.comment});
+  final Reply comment;
+  final String timeText;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  const _CommentTile({
+    required this.comment,
+    required this.timeText,
+    this.onEdit,
+    this.onDelete,
+  });
+
+  void _openCommentMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('수정'),
+              onTap: () {
+                Navigator.pop(context);
+                onEdit?.call();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('삭제', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(context);
+                onDelete?.call();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 프로필 원
         Container(
           width: 34,
           height: 34,
@@ -258,7 +539,6 @@ class _CommentTile extends StatelessWidget {
           child: const Icon(Icons.person, size: 18, color: Colors.black54),
         ),
         const SizedBox(width: 10),
-
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,11 +554,17 @@ class _CommentTile extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    comment.daysAgo == 0 ? '방금' : '${comment.daysAgo}일 전',
+                    timeText,
                     style: const TextStyle(color: Colors.black45, fontSize: 12),
                   ),
                   const Spacer(),
-                  // '노크하기' 버튼
+                  if (comment.isMine)
+                    IconButton(
+                      icon: const Icon(Icons.more_vert, size: 18),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => _openCommentMenu(context),
+                    ),
                 ],
               ),
               const SizedBox(height: 6),
@@ -296,7 +582,7 @@ class _CommentTile extends StatelessWidget {
 
 class _CommentInputBar extends StatelessWidget {
   final TextEditingController controller;
-  final VoidCallback onSubmit;
+  final Future<void> Function() onSubmit;
 
   const _CommentInputBar({required this.controller, required this.onSubmit});
 
@@ -312,7 +598,6 @@ class _CommentInputBar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // 왼쪽 프로필
             Container(
               width: 34,
               height: 34,
@@ -323,8 +608,6 @@ class _CommentInputBar extends StatelessWidget {
               child: const Icon(Icons.person, size: 18, color: Colors.black54),
             ),
             const SizedBox(width: 10),
-
-            // 입력창
             Expanded(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -344,10 +627,7 @@ class _CommentInputBar extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(width: 10),
-
-            // 게시 버튼
             TextButton(
               onPressed: onSubmit,
               child: const Text(

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 enum PostType { post, question }
 
 class Post {
@@ -23,9 +21,9 @@ class Post {
     required this.daysAgo,
     required this.likes,
     required this.comments,
-    bool? isMine,
+    this.isMine = false,
     this.type = PostType.post,
-  }) : isMine = isMine ?? false;
+  });
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -56,24 +54,28 @@ class Post {
     ),
   );
 
-  // 수정용
   Post copyWith({
+    String? author,
+    String? category,
     String? title,
     String? content,
-    String? category,
+    int? daysAgo,
     int? likes,
     int? comments,
+    bool? isMine,
+    PostType? type,
   }) {
     return Post(
       id: id,
-      author: author,
+      author: author ?? this.author,
       category: category ?? this.category,
       title: title ?? this.title,
       content: content ?? this.content,
-      daysAgo: daysAgo,
+      daysAgo: daysAgo ?? this.daysAgo,
       likes: likes ?? this.likes,
       comments: comments ?? this.comments,
-      isMine: isMine,
+      isMine: isMine ?? this.isMine,
+      type: type ?? this.type,
     );
   }
 }
