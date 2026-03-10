@@ -3,6 +3,8 @@ import '../models/post.dart';
 import 'edit_post_page.dart';
 import '../models/reply.dart';
 import '../data/reply_api.dart';
+import '../repositories/reply_repository.dart';
+import '../data/reply_local.dart';
 
 class DetailPage extends StatefulWidget {
   final Post post;
@@ -15,8 +17,10 @@ class DetailPage extends StatefulWidget {
 class _DetailPageState extends State<DetailPage> {
   final TextEditingController _commentCtrl = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final ReplyApi _replyApi = ReplyApi();
-
+  final ReplyRepository _replyRepository = ReplyRepository(
+    api: ReplyApi(),
+    local: ReplyLocal(),
+  );
   late Post _post;
 
   List<Reply> _comments = [];
@@ -71,7 +75,7 @@ class _DetailPageState extends State<DetailPage> {
     });
 
     try {
-      final replies = await _replyApi.fetchReplies(
+      final replies = await _replyRepository.fetchReplies(
         postId: _post.id,
         page: 1,
         limit: _commentLimit,
@@ -116,7 +120,7 @@ class _DetailPageState extends State<DetailPage> {
       final nextPage = _commentPage + 1;
       print('다음 페이지 요청: $nextPage');
 
-      final replies = await _replyApi.fetchReplies(
+      final replies = await _replyRepository.fetchReplies(
         postId: _post.id,
         page: nextPage,
         limit: _commentLimit,
@@ -155,13 +159,12 @@ class _DetailPageState extends State<DetailPage> {
     if (text.isEmpty) return;
 
     try {
-      await _replyApi.createReply(
+      await _replyRepository.createReply(
         postId: _post.id,
         author: '예린',
         content: text,
         isMine: true,
       );
-
       _commentCtrl.clear();
       await _loadInitialComments();
 
@@ -207,7 +210,7 @@ class _DetailPageState extends State<DetailPage> {
     if (!ok) return;
 
     try {
-      await _replyApi.deleteReply(reply.id);
+      await _replyRepository.deleteReply(postId: _post.id, replyId: reply.id);
       await _loadInitialComments();
 
       if (!mounted) return;
@@ -252,7 +255,11 @@ class _DetailPageState extends State<DetailPage> {
     if (newText == null || newText.isEmpty) return;
 
     try {
-      await _replyApi.updateReply(replyId: reply.id, content: newText);
+      await _replyRepository.updateReply(
+        postId: _post.id,
+        replyId: reply.id,
+        content: newText,
+      );
       await _loadInitialComments();
 
       if (!mounted) return;
