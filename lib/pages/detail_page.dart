@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/post.dart';
 import 'edit_post_page.dart';
+import '../models/reply.dart';
+import '../data/reply_api.dart';
 
 class DetailPage extends StatefulWidget {
   final Post post;
@@ -12,16 +14,20 @@ class DetailPage extends StatefulWidget {
 
 class _DetailPageState extends State<DetailPage> {
   final TextEditingController _commentCtrl = TextEditingController();
+  final ReplyApi _replyApi = ReplyApi();
+
   late Post _post;
 
-  // 댓글 mock data
-  final List<_Comment> _comments = [
-    _Comment(
-      author: 'Mark',
-      content: '포트폴리오를 managinggc@gmail.com 으로 보내주시면 검토 드릴게요',
-      daysAgo: 15,
-    ),
-  ];
+  List<Reply> _comments = [];
+  bool _isLoadingComments = true;
+  String? _commentError;
+
+  @override
+  void initState() {
+    super.initState();
+    _post = widget.post;
+    _loadComments();
+  }
 
   @override
   void dispose() {
@@ -29,20 +35,53 @@ class _DetailPageState extends State<DetailPage> {
     super.dispose();
   }
 
-  void _addComment() {
+  Future<void> _loadComments() async {
+    try {
+      print("댓글 요청 시작");
+      final replies = await _replyApi.fetchReplies(_post.id);
+
+      print("댓글 개수: ${replies.length}");
+      if (!mounted) return;
+
+      setState(() {
+        _comments = replies;
+        _isLoadingComments = false;
+        _commentError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingComments = false;
+        _commentError = e.toString();
+      });
+    }
+  }
+
+  Future<void> _addComment() async {
     final text = _commentCtrl.text.trim();
     if (text.isEmpty) return;
 
-    setState(() {
-      _comments.insert(0, _Comment(author: '예린', content: text, daysAgo: 0));
-      _commentCtrl.clear();
-    });
-  }
+    try {
+      await _replyApi.createReply(
+        postId: _post.id,
+        author: '예린',
+        content: text,
+      );
 
-  @override
-  void initState() {
-    super.initState();
-    _post = widget.post;
+      _commentCtrl.clear();
+      await _loadComments();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('댓글이 등록되었어요')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('댓글 작성 실패: $e')));
+    }
   }
 
   Future<void> _openEdit() async {
@@ -52,7 +91,7 @@ class _DetailPageState extends State<DetailPage> {
     );
 
     if (updated != null) {
-      setState(() => _post = updated); // 상세 화면 즉시 갱신
+      setState(() => _post = updated);
     }
   }
 
@@ -85,7 +124,6 @@ class _DetailPageState extends State<DetailPage> {
     if (!ok) return;
 
     if (!mounted) return;
-    // 삭제 결과로 삭제된 글 id 반환
     Navigator.pop(context, _post.id);
   }
 
@@ -118,14 +156,26 @@ class _DetailPageState extends State<DetailPage> {
     );
   }
 
+  String _formatCreatedAt(String createdAt) {
+    final dt = DateTime.tryParse(createdAt);
+    if (dt == null) return '';
+
+    final diff = DateTime.now().difference(dt);
+
+    if (diff.inMinutes < 1) return '방금';
+    if (diff.inHours < 1) return '${diff.inMinutes}분 전';
+    if (diff.inDays < 1) return '${diff.inHours}시간 전';
+    return '${diff.inDays}일 전';
+  }
+
   @override
   Widget build(BuildContext context) {
+    print('DetailPage build 실행');
     final post = _post;
     final isMine = post.isMine;
 
     return Scaffold(
       backgroundColor: Colors.white,
-
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -142,19 +192,14 @@ class _DetailPageState extends State<DetailPage> {
             ),
         ],
       ),
-
-      // 댓글 입력바가 키보드에 밀려 올라오게
       resizeToAvoidBottomInset: true,
-
       body: SafeArea(
         child: Column(
           children: [
-            // 스크롤 영역(본문 + 댓글)
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                 children: [
-                  // 제목
                   Text(
                     post.title,
                     style: const TextStyle(
@@ -165,8 +210,6 @@ class _DetailPageState extends State<DetailPage> {
                     ),
                   ),
                   const SizedBox(height: 18),
-
-                  // 본문
                   Text(
                     post.content,
                     style: const TextStyle(
@@ -175,10 +218,7 @@ class _DetailPageState extends State<DetailPage> {
                       color: Colors.black87,
                     ),
                   ),
-
                   const SizedBox(height: 18),
-
-                  // 좋아요/댓글 카운트
                   Row(
                     children: [
                       const Icon(
@@ -199,26 +239,43 @@ class _DetailPageState extends State<DetailPage> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${post.comments}',
+                        '${_comments.length}',
                         style: const TextStyle(color: Colors.black54),
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 20),
                   const Divider(height: 1),
                   const SizedBox(height: 10),
 
-                  // 댓글 목록
-                  for (final c in _comments) ...[
-                    _CommentTile(comment: c),
-                    const SizedBox(height: 10),
-                  ],
+                  if (_isLoadingComments)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_commentError != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      child: Text('댓글을 불러오지 못했어요: $_commentError'),
+                    )
+                  else if (_comments.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Text('첫 댓글을 남겨보세요!'),
+                    )
+                  else
+                    ..._comments.map(
+                      (c) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _CommentTile(
+                          comment: c,
+                          timeText: _formatCreatedAt(c.createdAt),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
-
-            // 하단 댓글 입력 바
             _CommentInputBar(controller: _commentCtrl, onSubmit: _addComment),
           ],
         ),
@@ -227,27 +284,17 @@ class _DetailPageState extends State<DetailPage> {
   }
 }
 
-class _Comment {
-  final String author;
-  final String content;
-  final int daysAgo;
-  _Comment({
-    required this.author,
-    required this.content,
-    required this.daysAgo,
-  });
-}
-
 class _CommentTile extends StatelessWidget {
-  final _Comment comment;
-  const _CommentTile({required this.comment});
+  final Reply comment;
+  final String timeText;
+
+  const _CommentTile({required this.comment, required this.timeText});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 프로필 원
         Container(
           width: 34,
           height: 34,
@@ -258,7 +305,6 @@ class _CommentTile extends StatelessWidget {
           child: const Icon(Icons.person, size: 18, color: Colors.black54),
         ),
         const SizedBox(width: 10),
-
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,11 +320,9 @@ class _CommentTile extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    comment.daysAgo == 0 ? '방금' : '${comment.daysAgo}일 전',
+                    timeText,
                     style: const TextStyle(color: Colors.black45, fontSize: 12),
                   ),
-                  const Spacer(),
-                  // '노크하기' 버튼
                 ],
               ),
               const SizedBox(height: 6),
@@ -296,7 +340,7 @@ class _CommentTile extends StatelessWidget {
 
 class _CommentInputBar extends StatelessWidget {
   final TextEditingController controller;
-  final VoidCallback onSubmit;
+  final Future<void> Function() onSubmit;
 
   const _CommentInputBar({required this.controller, required this.onSubmit});
 
@@ -312,7 +356,6 @@ class _CommentInputBar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // 왼쪽 프로필
             Container(
               width: 34,
               height: 34,
@@ -323,8 +366,6 @@ class _CommentInputBar extends StatelessWidget {
               child: const Icon(Icons.person, size: 18, color: Colors.black54),
             ),
             const SizedBox(width: 10),
-
-            // 입력창
             Expanded(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -344,10 +385,7 @@ class _CommentInputBar extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(width: 10),
-
-            // 게시 버튼
             TextButton(
               onPressed: onSubmit,
               child: const Text(

@@ -6,6 +6,7 @@ import 'detail_page.dart';
 import '../widgets/filter_bottomsheet.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/post_api.dart';
 
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
@@ -18,123 +19,47 @@ class _FeedPageState extends State<FeedPage> {
   int _currentIndex = 0;
   FeedFilter _filter = FeedFilter.all;
 
-  static const _postsKey = 'feed_posts_v1';
+  final PostApi _postApi = PostApi();
 
-  final List<Post> posts = [
-    Post(
-      id: 1,
-      author: '테스트유저',
-      category: '일반',
-      title: '포트폴리오 첨삭 부탁드립니다.',
-      content: '안녕하세요. 저는 데이터사이언스 전공으로 학부 때 졸업하고, 올해 8월 금융공학 석사 졸업을 앞두고 있습니다.',
-      daysAgo: 23,
-      likes: 1,
-      comments: 1,
-      type: PostType.question,
-    ),
-    Post(
-      id: 2,
-      author: '예린',
-      category: '일반',
-      title: 'Flutter 피드 UI 기초로 만드는 중',
-      content: '상단바/하단바 만들었고 이제 게시물 리스트 붙이는 중!',
-      daysAgo: 2,
-      likes: 3,
-      comments: 0,
-      isMine: true,
-      type: PostType.post,
-    ),
-  ];
+  List<Post> posts = [];
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
+    debugPrint('FeedPage initState');
     _loadPosts();
   }
 
   Future<void> _loadPosts() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_postsKey);
-
-    if (raw == null) return; // 저장된 게 없으면 기존 샘플 posts 유지
+    debugPrint('1. _loadPosts 들어옴');
 
     try {
-      final List decoded = jsonDecode(raw) as List;
-      final loaded = decoded
-          .map((e) => Post.fromJson(e as Map<String, dynamic>))
-          .toList();
+      debugPrint('2. fetchPosts 호출 직전');
+
+      final loaded = await _postApi.fetchPosts();
+
+      debugPrint('3. fetchPosts 호출 끝');
+      debugPrint('게시글 개수: ${loaded.length}');
+
+      if (!mounted) return;
 
       setState(() {
-        posts
-          ..clear()
-          ..addAll(loaded);
+        posts = loaded;
+        _isLoading = false;
+        _error = null;
       });
     } catch (e) {
-      debugPrint('posts load error: $e');
-    }
-  }
+      debugPrint('4. _loadPosts 에러: $e');
 
-  Future<void> _savePosts() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = jsonEncode(posts.map((p) => p.toJson()).toList());
-    await prefs.setString(_postsKey, raw);
-  }
+      if (!mounted) return;
 
-  Future<void> _openCreate(PostType type) async {
-    final created = await Navigator.push<Post>(
-      context,
-      MaterialPageRoute(builder: (_) => CreatePostPage(type: type)),
-    );
-
-    if (created != null) {
       setState(() {
-        posts.insert(0, created);
+        _isLoading = false;
+        _error = e.toString();
       });
-      await _savePosts();
     }
-  }
-
-  void _openCreateTypeSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  '어떤 글을 작성할까요?',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 12),
-                ListTile(
-                  leading: const Icon(Icons.article_outlined),
-                  title: const Text('게시글'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _openCreate(PostType.post);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.help_outline),
-                  title: const Text('질문'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _openCreate(PostType.question);
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _openFilterSheet() async {
@@ -169,7 +94,7 @@ class _FeedPageState extends State<FeedPage> {
         leading: IconButton(
           onPressed: () {},
           icon: const Icon(Icons.search),
-          tooltip: '검색',
+          tooltip: '안녕',
         ),
         actions: [
           IconButton(
@@ -185,46 +110,36 @@ class _FeedPageState extends State<FeedPage> {
         ],
       ),
 
-      body: ListView.separated(
-        padding: const EdgeInsets.only(top: 10, bottom: 140), // FAB 공간 확보
-        itemCount: filteredPosts.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 6),
-        itemBuilder: (context, index) {
-          final post = filteredPosts[index];
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? Center(child: Text('에러: $_error'))
+          : ListView.separated(
+              padding: const EdgeInsets.only(top: 10, bottom: 140),
+              itemCount: filteredPosts.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 6),
+              itemBuilder: (context, index) {
+                final post = filteredPosts[index];
 
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () async {
-              final result = await Navigator.push<Object?>(
-                context,
-                MaterialPageRoute(builder: (_) => DetailPage(post: post)),
-              );
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () async {
+                    final result = await Navigator.push<Object?>(
+                      context,
+                      MaterialPageRoute(builder: (_) => DetailPage(post: post)),
+                    );
 
-              if (result == null) return;
+                    if (result == null) return;
 
-              setState(() {
-                if (result is int) {
-                  // 삭제 케이스: id가 돌아옴
-                  posts.removeWhere((p) => p.id == result);
-                  return;
-                }
-
-                if (result is Post) {
-                  // 수정/갱신 케이스: Post가 돌아옴
-                  final i = posts.indexWhere((p) => p.id == result.id);
-                  if (i != -1) posts[i] = result;
-                }
-              });
-              _savePosts();
-            },
-
-            child: PostCard(post: post),
-          );
-        },
-      ),
+                    await _loadPosts();
+                  },
+                  child: PostCard(post: post),
+                );
+              },
+            ),
 
       floatingActionButton: FloatingActionButton(
-        onPressed: _openCreateTypeSheet,
+        onPressed: () {},
         child: const Icon(Icons.edit),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
