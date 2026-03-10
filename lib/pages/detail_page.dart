@@ -14,47 +14,139 @@ class DetailPage extends StatefulWidget {
 
 class _DetailPageState extends State<DetailPage> {
   final TextEditingController _commentCtrl = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final ReplyApi _replyApi = ReplyApi();
 
   late Post _post;
 
   List<Reply> _comments = [];
+
   bool _isLoadingComments = true;
+  bool _isLoadingMore = false;
+  bool _hasMoreComments = true;
   String? _commentError;
+
+  int _commentPage = 1;
+  static const int _commentLimit = 10;
 
   @override
   void initState() {
     super.initState();
     _post = widget.post;
-    _loadComments();
+    _loadInitialComments();
+    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
     _commentCtrl.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadComments() async {
-    try {
-      print("댓글 요청 시작");
-      final replies = await _replyApi.fetchReplies(_post.id);
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
 
-      print("댓글 개수: ${replies.length}");
+    final position = _scrollController.position;
+
+    print('스크롤 위치: ${position.pixels} / 최대: ${position.maxScrollExtent}');
+
+    if (position.pixels >= position.maxScrollExtent - 200) {
+      print('바닥 근처 도달 -> 추가 로드 시도');
+      _loadMoreComments();
+    }
+  }
+
+  Future<void> _loadInitialComments() async {
+    print('초기 댓글 로드 시작');
+
+    if (!mounted) return;
+
+    setState(() {
+      _isLoadingComments = true;
+      _commentError = null;
+      _commentPage = 1;
+      _hasMoreComments = true;
+      _comments = [];
+    });
+
+    try {
+      final replies = await _replyApi.fetchReplies(
+        postId: _post.id,
+        page: 1,
+        limit: _commentLimit,
+      );
+
+      print('초기 로드 댓글 수: ${replies.length}');
+
       if (!mounted) return;
 
       setState(() {
         _comments = replies;
         _isLoadingComments = false;
-        _commentError = null;
+        _hasMoreComments = replies.length == _commentLimit;
       });
+
+      print('초기 로드 후 hasMore: $_hasMoreComments');
     } catch (e) {
+      print('초기 댓글 로드 에러: $e');
+
       if (!mounted) return;
 
       setState(() {
         _isLoadingComments = false;
         _commentError = e.toString();
       });
+    }
+  }
+
+  Future<void> _loadMoreComments() async {
+    print('추가 로드 진입');
+    print(
+      '_isLoadingMore: $_isLoadingMore, _hasMoreComments: $_hasMoreComments',
+    );
+
+    if (_isLoadingMore || !_hasMoreComments) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final nextPage = _commentPage + 1;
+      print('다음 페이지 요청: $nextPage');
+
+      final replies = await _replyApi.fetchReplies(
+        postId: _post.id,
+        page: nextPage,
+        limit: _commentLimit,
+      );
+
+      print('추가 로드 댓글 수: ${replies.length}');
+
+      if (!mounted) return;
+
+      setState(() {
+        _comments.addAll(replies);
+        _commentPage = nextPage;
+        _isLoadingMore = false;
+        _hasMoreComments = replies.length == _commentLimit;
+      });
+
+      print('현재 전체 댓글 수: ${_comments.length}');
+      print('추가 로드 후 hasMore: $_hasMoreComments');
+    } catch (e) {
+      print('추가 댓글 로드 에러: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingMore = false;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('댓글 추가 로드 실패: $e')));
     }
   }
 
@@ -67,10 +159,11 @@ class _DetailPageState extends State<DetailPage> {
         postId: _post.id,
         author: '예린',
         content: text,
+        isMine: true,
       );
 
       _commentCtrl.clear();
-      await _loadComments();
+      await _loadInitialComments();
 
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -115,7 +208,7 @@ class _DetailPageState extends State<DetailPage> {
 
     try {
       await _replyApi.deleteReply(reply.id);
-      await _loadComments();
+      await _loadInitialComments();
 
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -160,8 +253,7 @@ class _DetailPageState extends State<DetailPage> {
 
     try {
       await _replyApi.updateReply(replyId: reply.id, content: newText);
-
-      await _loadComments();
+      await _loadInitialComments();
 
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -261,7 +353,6 @@ class _DetailPageState extends State<DetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    print('DetailPage build 실행');
     final post = _post;
     final isMine = post.isMine;
 
@@ -289,6 +380,7 @@ class _DetailPageState extends State<DetailPage> {
           children: [
             Expanded(
               child: ListView(
+                controller: _scrollController,
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                 children: [
                   Text(
@@ -365,6 +457,12 @@ class _DetailPageState extends State<DetailPage> {
                           onDelete: () => _deleteComment(c),
                         ),
                       ),
+                    ),
+
+                  if (_isLoadingMore)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator()),
                     ),
                 ],
               ),
