@@ -12,7 +12,7 @@ class Post {
   final int comments;
   final bool isMine;
   final PostType type;
-
+  final String? imagePath;
   Post({
     required this.id,
     required this.author,
@@ -25,6 +25,7 @@ class Post {
     required this.comments,
     this.isMine = false,
     this.type = PostType.post,
+    this.imagePath,
   });
 
   Map<String, dynamic> toJson() => {

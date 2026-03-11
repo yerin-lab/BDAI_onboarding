@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import '../models/post.dart';
 
@@ -116,6 +118,20 @@ class PostCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
 
+                if (post.imagePath != null && post.imagePath!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.file(
+                      File(post.imagePath!),
+                      height: 120,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 12),
                 // 좋아요/댓글
                 Row(
                   children: [
