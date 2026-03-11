@@ -14,17 +14,10 @@ class ReplyApi {
       '$baseUrl/replies?postId=$postId&_sort=id&_order=desc&_page=$page&_limit=$limit',
     );
 
-    print('댓글 요청 URI: $uri');
-
     final response = await http.get(uri);
-
-    print('댓글 응답 코드: ${response.statusCode}');
-    print('댓글 응답 바디: ${response.body}');
 
     if (response.statusCode == 200) {
       final List data = jsonDecode(response.body) as List;
-
-      print('파싱된 댓글 개수: ${data.length}');
 
       return data
           .map((e) => Reply.fromJson(e as Map<String, dynamic>))
@@ -83,6 +76,24 @@ class ReplyApi {
 
     if (response.statusCode != 200) {
       throw Exception('댓글 수정 실패: ${response.statusCode}');
+    }
+  }
+
+  Future<void> likeReply(int replyId) async {
+    final uri = Uri.parse('$baseUrl/replies/$replyId/like');
+    final response = await http.post(uri);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('댓글 좋아요 실패');
+    }
+  }
+
+  Future<void> unlikeReply(int replyId) async {
+    final uri = Uri.parse('$baseUrl/replies/$replyId/like');
+    final response = await http.delete(uri);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('댓글 좋아요 취소 실패');
     }
   }
 }

@@ -28,7 +28,6 @@ class _FeedPageState extends State<FeedPage> {
   @override
   void initState() {
     super.initState();
-    debugPrint('FeedPage initState');
     _loadPosts();
   }
 
@@ -114,32 +113,42 @@ class _FeedPageState extends State<FeedPage> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
           ? Center(child: Text('에러: $_error'))
-          : ListView.separated(
-              padding: const EdgeInsets.only(top: 10, bottom: 140),
-              itemCount: filteredPosts.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 6),
-              itemBuilder: (context, index) {
-                final post = filteredPosts[index];
+          : RefreshIndicator(
+              onRefresh: _loadPosts,
+              child: ListView.separated(
+                padding: const EdgeInsets.only(top: 10, bottom: 140),
+                itemCount: filteredPosts.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                itemBuilder: (context, index) {
+                  final post = filteredPosts[index];
 
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () async {
-                    final result = await Navigator.push<Object?>(
-                      context,
-                      MaterialPageRoute(builder: (_) => DetailPage(post: post)),
-                    );
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () async {
+                      final result = await Navigator.push<Object?>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DetailPage(post: post),
+                        ),
+                      );
 
-                    if (result == null) return;
+                      if (result == null) return;
 
-                    await _loadPosts();
-                  },
-                  child: PostCard(post: post),
-                );
-              },
+                      await _loadPosts();
+                    },
+                    child: PostCard(post: post),
+                  );
+                },
+              ),
             ),
 
       floatingActionButton: FloatingActionButton(
-        onPressed: () {},
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CreatePostPage()),
+          );
+        },
         child: const Icon(Icons.edit),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,

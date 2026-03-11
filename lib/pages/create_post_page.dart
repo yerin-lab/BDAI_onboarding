@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/post.dart';
 
 class CreatePostPage extends StatefulWidget {
@@ -22,6 +26,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
     '일상',
   ];
   String? _selectedCategory;
+  XFile? _selectedImage;
+  bool _isImageUpdated = false;
 
   @override
   void dispose() {
@@ -63,11 +69,111 @@ class _CreatePostPageState extends State<CreatePostPage> {
       content: content,
       daysAgo: 0,
       likes: 0,
+      isLiked: false,
       comments: 0,
       type: widget.type,
+      imagePath: _selectedImage?.path,
     );
 
     Navigator.pop(context, post);
+  }
+
+  // Future<void> _pickImage() async {
+  //   final status = await Permission.storage.request();
+
+  //   if (status == PermissionStatus.denied ||
+  //       status == PermissionStatus.permanentlyDenied) {
+  //     if (!mounted) return;
+
+  //     ScaffoldMessenger.of(
+  //       context,
+  //     ).showSnackBar(const SnackBar(content: Text('갤러리 접근 권한이 필요합니다.')));
+  //     return;
+  //   }
+
+  //   try {
+  //     final ImagePicker picker = ImagePicker();
+  //     final XFile? localImage = await picker.pickImage(
+  //       source: ImageSource.gallery,
+  //       imageQuality: 50,
+  //     );
+
+  //     if (localImage == null) return;
+
+  //     setState(() {
+  //       _selectedImage = localImage;
+  //       _isImageUpdated = true;
+  //     });
+  //   } catch (error) {
+  //     if (!mounted) return;
+
+  //     ScaffoldMessenger.of(
+  //       context,
+  //     ).showSnackBar(const SnackBar(content: Text('이미지 선택 중 오류가 발생했습니다.')));
+  //   }
+  // }
+
+  Future<void> _pickImage() async {
+    try {
+      final picker = ImagePicker();
+      final XFile? localImage = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 50,
+      );
+
+      if (localImage == null) return;
+
+      setState(() {
+        _selectedImage = localImage;
+        _isImageUpdated = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('이미지 선택 중 오류가 발생했습니다. $e')));
+    }
+  }
+
+  void _deleteImage() {
+    setState(() {
+      _selectedImage = null;
+      _isImageUpdated = true;
+    });
+  }
+
+  Widget _buildImageSection() {
+    if (_selectedImage == null) {
+      return CustomBoxContainer(
+        width: 270,
+        height: 150,
+        onTap: () {
+          _pickImage();
+        },
+        borderColor: Colors.grey,
+        hasRoundEdge: false,
+        child: const Icon(Icons.add, color: Colors.grey, size: 30),
+      );
+    }
+
+    return CustomBoxContainer(
+      width: 270,
+      height: 150,
+      onTap: () {
+        _pickImage();
+      },
+      image: DecorationImage(
+        fit: BoxFit.cover,
+        image: FileImage(File(_selectedImage!.path)),
+      ),
+      child: Align(
+        alignment: Alignment.topRight,
+        child: IconButton(
+          onPressed: _deleteImage,
+          icon: const Icon(Icons.close),
+        ),
+      ),
+    );
   }
 
   @override
@@ -106,13 +212,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
             ),
 
             const SizedBox(height: 12),
+            _buildImageSection(),
+            const SizedBox(height: 12),
 
             // 제목 입력
             TextField(
               controller: _titleCtrl,
               decoration: const InputDecoration(
                 hintText: '제목을 입력해주세요',
-                border: InputBorder.none,
+                border: OutlineInputBorder(),
               ),
             ),
 
@@ -127,12 +235,65 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 textAlignVertical: TextAlignVertical.top,
                 decoration: const InputDecoration(
                   hintText: '내용을 입력해주세요.',
-                  border: InputBorder.none,
+                  border: OutlineInputBorder(),
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class CustomBoxContainer extends StatelessWidget {
+  const CustomBoxContainer({
+    super.key,
+    this.hasRoundEdge = true,
+    this.center = false,
+    this.borderColor,
+    this.color = Colors.white,
+    this.boxShadow,
+    this.width,
+    this.height,
+    this.child,
+    this.image,
+    this.onTap,
+    this.onLongPress,
+    this.borderRadius,
+  });
+
+  final bool hasRoundEdge;
+  final bool center;
+  final Color? borderColor;
+  final Color color;
+  final List<BoxShadow>? boxShadow;
+  final double? width;
+  final double? height;
+  final Widget? child;
+  final DecorationImage? image;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final BorderRadiusGeometry? borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onLongPress: onLongPress,
+      onTap: onTap,
+      child: Container(
+        width: width,
+        height: height,
+        alignment: center ? Alignment.center : null,
+        decoration: BoxDecoration(
+          borderRadius:
+              borderRadius ?? (hasRoundEdge ? BorderRadius.circular(10) : null),
+          color: color,
+          boxShadow: boxShadow,
+          border: borderColor != null ? Border.all(color: borderColor!) : null,
+          image: image,
+        ),
+        child: child,
       ),
     );
   }

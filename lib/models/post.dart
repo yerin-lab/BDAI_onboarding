@@ -8,10 +8,11 @@ class Post {
   final String content;
   final int daysAgo;
   final int likes;
+  final bool isLiked;
   final int comments;
   final bool isMine;
   final PostType type;
-
+  final String? imagePath;
   Post({
     required this.id,
     required this.author,
@@ -20,9 +21,11 @@ class Post {
     required this.content,
     required this.daysAgo,
     required this.likes,
+    required this.isLiked,
     required this.comments,
     this.isMine = false,
     this.type = PostType.post,
+    this.imagePath,
   });
 
   Map<String, dynamic> toJson() => {
@@ -38,21 +41,23 @@ class Post {
     'type': type.name,
   };
 
-  factory Post.fromJson(Map<String, dynamic> json) => Post(
-    id: json['id'] as int,
-    author: json['author'] as String,
-    category: json['category'] as String,
-    title: json['title'] as String,
-    content: json['content'] as String,
-    daysAgo: json['daysAgo'] as int,
-    likes: json['likes'] as int,
-    comments: json['comments'] as int,
-    isMine: (json['isMine'] as bool?) ?? false,
-    type: PostType.values.firstWhere(
-      (e) => e.name == (json['type'] as String? ?? 'post'),
-      orElse: () => PostType.post,
-    ),
-  );
+  factory Post.fromJson(Map<String, dynamic> json) {
+    final typeString = json['type'] as String? ?? 'post';
+
+    return Post(
+      id: json['id'] as int,
+      author: json['author'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      content: json['content'] as String? ?? '',
+      daysAgo: json['daysAgo'] as int? ?? 0,
+      likes: json['likes'] as int? ?? 0,
+      isLiked: json['isLiked'] as bool? ?? false,
+      comments: json['comments'] as int? ?? 0,
+      type: typeString == 'question' ? PostType.question : PostType.post,
+      isMine: json['isMine'] as bool? ?? false,
+    );
+  }
 
   Post copyWith({
     String? author,
@@ -61,6 +66,7 @@ class Post {
     String? content,
     int? daysAgo,
     int? likes,
+    bool? isLiked,
     int? comments,
     bool? isMine,
     PostType? type,
@@ -73,6 +79,7 @@ class Post {
       content: content ?? this.content,
       daysAgo: daysAgo ?? this.daysAgo,
       likes: likes ?? this.likes,
+      isLiked: isLiked ?? this.isLiked,
       comments: comments ?? this.comments,
       isMine: isMine ?? this.isMine,
       type: type ?? this.type,
