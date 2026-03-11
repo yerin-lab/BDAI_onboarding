@@ -8,12 +8,8 @@ class PostApi {
 
   Future<List<Post>> fetchPosts() async {
     final uri = Uri.parse('$baseUrl/posts');
-    debugPrint('A. 요청 URL: $uri');
 
     final response = await http.get(uri).timeout(const Duration(seconds: 10));
-
-    debugPrint('B. 응답 코드: ${response.statusCode}');
-    debugPrint('C. 응답 바디: ${response.body}');
 
     if (response.statusCode == 200) {
       final List data = jsonDecode(response.body) as List;

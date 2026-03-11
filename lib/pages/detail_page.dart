@@ -61,17 +61,12 @@ class _DetailPageState extends State<DetailPage> {
 
     final position = _scrollController.position;
 
-    debugPrint('스크롤 위치: ${position.pixels} / 최대: ${position.maxScrollExtent}');
-
     if (position.pixels >= position.maxScrollExtent - 200) {
-      debugPrint('바닥 근처 도달 -> 추가 로드 시도');
       _loadMoreComments();
     }
   }
 
   Future<void> _loadInitialComments() async {
-    debugPrint('초기 댓글 로드 시작');
-
     if (!mounted) return;
 
     setState(() {
@@ -89,8 +84,6 @@ class _DetailPageState extends State<DetailPage> {
         limit: _commentLimit,
       );
 
-      debugPrint('초기 로드 댓글 수: ${replies.length}');
-
       if (!mounted) return;
 
       setState(() {
@@ -98,11 +91,7 @@ class _DetailPageState extends State<DetailPage> {
         _isLoadingComments = false;
         _hasMoreComments = replies.length == _commentLimit;
       });
-
-      debugPrint('초기 로드 후 hasMore: $_hasMoreComments');
     } catch (e) {
-      debugPrint('초기 댓글 로드 에러: $e');
-
       if (!mounted) return;
 
       setState(() {
@@ -113,11 +102,6 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   Future<void> _loadMoreComments() async {
-    debugPrint('추가 로드 진입');
-    debugPrint(
-      '_isLoadingMore: $_isLoadingMore, _hasMoreComments: $_hasMoreComments',
-    );
-
     if (_isLoadingMore || !_hasMoreComments) return;
 
     setState(() {
@@ -134,8 +118,6 @@ class _DetailPageState extends State<DetailPage> {
         limit: _commentLimit,
       );
 
-      debugPrint('추가 로드 댓글 수: ${replies.length}');
-
       if (!mounted) return;
 
       setState(() {
@@ -144,12 +126,7 @@ class _DetailPageState extends State<DetailPage> {
         _isLoadingMore = false;
         _hasMoreComments = replies.length == _commentLimit;
       });
-
-      debugPrint('현재 전체 댓글 수: ${_comments.length}');
-      debugPrint('추가 로드 후 hasMore: $_hasMoreComments');
     } catch (e) {
-      debugPrint('추가 댓글 로드 에러: $e');
-
       if (!mounted) return;
 
       setState(() {

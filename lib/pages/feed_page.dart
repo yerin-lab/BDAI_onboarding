@@ -28,7 +28,6 @@ class _FeedPageState extends State<FeedPage> {
   @override
   void initState() {
     super.initState();
-    debugPrint('FeedPage initState');
     _loadPosts();
   }
 
